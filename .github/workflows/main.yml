@@ -74,7 +74,7 @@ jobs:
          tags: latest,${{ github.run_number }}
          daemon_off: false
          dockerfile: ./Docker-files/app/Dockerfile
-         context: ./
+         context: ./Docker-files/app/
 
          
   DeployToEKS:
