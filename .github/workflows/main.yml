@@ -73,7 +73,7 @@ jobs:
          region: ${{ env.AWS_REGION }}
          tags: latest,${{ github.run_number }}
          daemon_off: false
-         dockerfile: ./Dockerfile
+         dockerfile: ./Docker-files/app/Dockerfile
          context: ./
 
          
