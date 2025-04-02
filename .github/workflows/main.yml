@@ -1,9 +1,9 @@
-name: vision actions
+name: visionOps actions
 on: workflow_dispatch
 env:
   AWS_REGION: us-east-2
-  ECR_REPOSITORY: image-reg
-  EKS_CLUSTER: vision-eks
+  ECR_REPOSITORY: vision-reg
+  EKS_CLUSTER: vision-eks1
 
 jobs:
   Testing:
@@ -98,6 +98,10 @@ jobs:
       #- name: Login to ECR
       #  run: kubectl create secret docker-registry regcred --docker-server=${{ secrets.REGISTRY }} --docker-username=AWS  --docker-password=$(aws ecr get-login-password) 
       
+      # Create name space vns for our project
+      - name: Create VNS namespace (if not exists)
+        run: kubectl create namespace vns --dry-run=client -o yaml | kubectl apply -f -
+
       - name: Create/Update ECR registry secret
         run: |
           kubectl create secret docker-registry regcred \
