@@ -73,8 +73,8 @@ jobs:
          region: ${{ env.AWS_REGION }}
          tags: latest,${{ github.run_number }}
          daemon_off: false
-         dockerfile: Docker-files/app/Dockerfile  # Update with correct path
-         context: Docker-files/app  # Update with correct build directory
+         dockerfile: ./Docker-files/app/Dockerfile
+         context: ./
 
          
   DeployToEKS:
