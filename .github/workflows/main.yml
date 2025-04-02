@@ -1,18 +1,22 @@
 name: visionOps actions
-on: workflow_dispatch
+
+on: 
+  workflow_dispatch
+
 env:
   AWS_REGION: us-east-2
   ECR_REPOSITORY: image-reg
   EKS_CLUSTER: vision-eks1
+  IMAGE_TAG: ${{ secrets.REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.run_number }}
 
 jobs:
   Testing:
     runs-on: ubuntu-latest
     steps:
-      - name: Code checkout
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Maven test
+      - name: Maven Test
         run: mvn test
 
       - name: Checkstyle
@@ -31,60 +35,54 @@ jobs:
     needs: Testing
     runs-on: ubuntu-latest
     steps:
-      - name: Code checkout
+      - name: Checkout Code
         uses: actions/checkout@v4
 
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        run: |
-          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin ${{ secrets.REGISTRY }}
-
-      - name: Build Docker Image
-        run: |
-          GIT_BUILD_NUMBER=${{ github.run_number }}
-          IMAGE_TAG="${{ secrets.REGISTRY }}/${{ env.ECR_REPOSITORY }}:$GIT_BUILD_NUMBER"
-          docker build -t $IMAGE_TAG -f Docker-files/app/Dockerfile Docker-files/app
-          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
-
-      - name: Push Image to ECR
-        run: |
-          docker push $IMAGE_TAG
-
-  DeployToEKS:
-    needs: BUILD_AND_PUBLISH
-    runs-on: ubuntu-latest
-    steps:
-      - name: Code checkout
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Get Kube config file
+      - name: Login to ECR
+        run: aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.REGISTRY }}
+
+      - name: Build Docker Image
+        run: docker build -t $IMAGE_TAG -f Docker-files/app/Dockerfile Docker-files/app
+
+      - name: Push Docker Image to ECR
+        run: docker push $IMAGE_TAG
+
+  DeployToEKS:
+    needs: BUILD_AND_PUBLISH
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Get Kubeconfig
         run: aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER }}
 
-      - name: Create VNS namespace (if not exists)
+      - name: Create Kubernetes Namespace
         run: kubectl create namespace vns --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Create/Update ECR registry secret
+      - name: Create/Update ECR Secret in Kubernetes
         run: |
           kubectl create secret docker-registry regcred \
-          --docker-server=${{ secrets.REGISTRY }} \
-          --docker-username=AWS \
-          --docker-password=$(aws ecr get-login-password) \
-          --dry-run=client -o yaml | kubectl apply -f -
+            --docker-server=${{ secrets.REGISTRY }} \
+            --docker-username=AWS \
+            --docker-password=$(aws ecr get-login-password) \
+            --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Deploy Helm
+      - name: Deploy to EKS using Helm
         uses: bitovi/github-actions-deploy-eks-helm@v1.2.8
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
